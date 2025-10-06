@@ -27,3 +27,16 @@ def suggest_tasks() -> dict:
     return {"suggestions": suggestions}
 
 
+@tasks_bp.post("/rank")
+def rank_tasks() -> dict:
+    payload = request.get_json(silent=True) or {}
+    tasks = payload.get("tasks", [])
+    context = payload.get("context", "")
+
+    if not tasks:
+        return {"error": "No tasks provided"}, 400
+
+    ranked = TaskService().rank_tasks(tasks, context)
+    return {"ranked_tasks": ranked}
+
+

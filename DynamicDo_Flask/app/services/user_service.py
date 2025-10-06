@@ -18,8 +18,14 @@ class UserService:
             raise ValueError("User already exists")
 
         hashed = self.hash_password(password)
-        users_collection.insert_one({"email": email, "password": hashed})
-        return {"email": email}
+        result = users_collection.insert_one({
+            "email": email,
+            "password": hashed,
+            "created_at": datetime.utcnow()
+        })
+
+        user_id = str(result.inserted_id)
+        return {"user_id": user_id, "email": email}
 
     def login_user(self, email: str, password: str) -> str:
         user = users_collection.find_one({"email": email})
@@ -27,6 +33,7 @@ class UserService:
             raise ValueError("Invalid email or password")
 
         payload = {
+            "user_id": str(user["_id"]),
             "email": email,
             "exp": datetime.utcnow() + timedelta(hours=1)  # 1小时过期
         }
@@ -36,7 +43,7 @@ class UserService:
     def verify_token(self, token: str) -> Optional[dict]:
         try:
             decoded = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            return decoded  # { "email": ..., "exp": ... }
+            return decoded  # { "user_id": ..., "email": ..., "exp": ... }
         except jwt.ExpiredSignatureError:
             return None
         except jwt.InvalidTokenError:

@@ -31,4 +31,4 @@ def me():
     decoded = service.verify_token(token)
     if not decoded:
         return jsonify({"error": "Invalid or expired token"}), 401
-    return jsonify({"email": decoded["email"]})
+    return jsonify({"user_id": decoded["user_id"], "email": decoded["email"]})

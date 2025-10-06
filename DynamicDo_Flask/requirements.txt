@@ -19,7 +19,7 @@ jiter==0.11.0
 MarkupSafe==3.0.3
 openai==2.0.0
 pydantic==2.11.9
-pydantic_core==2.39.0
+pydantic_core==2.33.2
 PyJWT==2.10.1
 pymongo==4.15.1
 python-dotenv==1.1.1

@@ -18,8 +18,19 @@ class TaskService:
         return {"id": "temp", **data}
 
     def suggest_tasks_from_text(self, text: str) -> list[dict[str, Any]]:
+        """Extract tasks from natural language text using AI."""
         if not text:
             return []
         return self.ai_client.extract_tasks(text)
+
+    def rank_tasks(
+        self,
+        tasks: list[dict[str, Any]],
+        context: str = ""
+    ) -> list[dict[str, Any]]:
+        """Rank a list of tasks/reminders by priority using AI."""
+        if not tasks:
+            return []
+        return self.ai_client.rank_reminders(tasks, context)
 
 
