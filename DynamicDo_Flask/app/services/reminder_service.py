@@ -23,6 +23,7 @@ class ReminderService:
         if not title:
             raise ValueError("Reminder title is required")
 
+        now = datetime.utcnow()
         reminder = {
             "title": title,
             "notes": data.get("notes"),
@@ -33,7 +34,9 @@ class ReminderService:
             "list": data.get("list"),
             "tag": data.get("tag"),
             "user_id": user_id,
-            "created_at": datetime.utcnow()
+            "completed": False,
+            "created_at": now,
+            "updated_at": now
         }
 
         result = reminders_collection.insert_one(reminder)
@@ -71,11 +74,11 @@ class ReminderService:
             the id of delete reminder, and unable delete reminder
 
         Raises:
-            ValueError: If reminder is missing 
+            ValueError: If reminder is missing
         """
         if not data:
             raise ValueError("No Reminder IDs provided for deletion")
-        
+
         ignored = data[10:] # cap
         ids_to_process = data[:10]
 
@@ -87,11 +90,11 @@ class ReminderService:
                 valid_ids.append(ObjectId(rid))
             except Exception:
                 invalid_ids.append(rid)
-        
+
         #find out the reminder that below to user
         existing = list(reminders_collection.find(
             {"_id": {"$in": valid_ids}, "user_id": user_id},# find the all valid in db
-            {"_id": 1} #only want the id to return 
+            {"_id": 1} #only want the id to return
         ))
         found_ids = [str(r["_id"]) for r in existing] # have to convert from objectid to str
 
@@ -104,4 +107,144 @@ class ReminderService:
             "not_found": not_found + invalid_ids,
             "ignored": ignored
         }
+
+    def update_reminder(self, user_id: str, reminder_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing reminder.
+
+        Args:
+            user_id: ID of the user who owns the reminder
+            reminder_id: ID of the reminder to update
+            data: Fields to update (title, notes, url, date, time, priority, list, tag)
+
+        Returns:
+            Updated reminder with id field
+
+        Raises:
+            ValueError: If reminder_id is invalid or reminder not found
+        """
+        # Convert reminder_id to ObjectId
+        try:
+            obj_id = ObjectId(reminder_id)
+        except Exception:
+            raise ValueError("Invalid reminder ID")
+
+        # Build update document with only provided fields
+        update_fields = {}
+        allowed_fields = ["title", "notes", "url", "date", "time", "priority", "list", "tag"]
+
+        for field in allowed_fields:
+            if field in data:
+                if field == "title":
+                    # Validate title is not empty
+                    title = data["title"].strip() if data["title"] else ""
+                    if not title:
+                        raise ValueError("Reminder title cannot be empty")
+                    update_fields["title"] = title
+                else:
+                    update_fields[field] = data[field]
+
+        if not update_fields:
+            raise ValueError("No valid fields to update")
+
+        # Always update the updated_at timestamp
+        update_fields["updated_at"] = datetime.utcnow()
+
+        # Update the reminder
+        result = reminders_collection.find_one_and_update(
+            {"_id": obj_id, "user_id": user_id},
+            {"$set": update_fields},
+            return_document=True
+        )
+
+        if not result:
+            raise ValueError("Reminder not found or does not belong to user")
+
+        # Convert ObjectId to string id for response
+        result["id"] = str(result["_id"])
+        del result["_id"]
+
+        return result
+
+    def toggle_reminder_completion(self, user_id: str, data: list[str], completed: bool) -> dict[str, Any]:
+        """Toggle the completion status of reminders, cap for 10 first.
+
+        Args:
+            user_id: ID of the user who owns the reminders
+            data: list of reminder IDs to toggle
+            completed: True to mark as completed, False to mark as not completed
+
+        Returns:
+            Dictionary with updated, not_found, and ignored reminder IDs
+
+        Raises:
+            ValueError: If reminder list is empty
+        """
+        if not data:
+            raise ValueError("No Reminder IDs provided")
+
+        ignored = data[10:]  # cap
+        ids_to_process = data[:10]
+
+        # Convert to ObjectId
+        valid_ids, invalid_ids = [], []
+        for rid in ids_to_process:
+            try:
+                valid_ids.append(ObjectId(rid))
+            except Exception:
+                invalid_ids.append(rid)
+
+        # Find reminders that belong to user
+        existing = list(reminders_collection.find(
+            {"_id": {"$in": valid_ids}, "user_id": user_id},
+            {"_id": 1}
+        ))
+        found_ids = [str(r["_id"]) for r in existing]
+
+        # Update completion status for all found reminders
+        if existing:
+            reminders_collection.update_many(
+                {"_id": {"$in": [r["_id"] for r in existing]}},
+                {"$set": {"completed": completed, "updated_at": datetime.utcnow()}}
+            )
+
+        not_found = [rid for rid in ids_to_process if rid not in found_ids]
+
+        return {
+            "updated": found_ids,
+            "not_found": not_found + invalid_ids,
+            "ignored": ignored
+        }
+
+    def get_reminder_by_id(self, user_id: str, reminder_id: str) -> dict[str, Any]:
+        """Get a single reminder by ID.
+
+        Args:
+            user_id: ID of the user who owns the reminder
+            reminder_id: ID of the reminder to retrieve
+
+        Returns:
+            Reminder with id field
+
+        Raises:
+            ValueError: If reminder_id is invalid or reminder not found
+        """
+        # Convert reminder_id to ObjectId
+        try:
+            obj_id = ObjectId(reminder_id)
+        except Exception:
+            raise ValueError("Invalid reminder ID")
+
+        # Find the reminder
+        reminder = reminders_collection.find_one(
+            {"_id": obj_id, "user_id": user_id}
+        )
+
+        if not reminder:
+            raise ValueError("Reminder not found or does not belong to user")
+
+        # Convert ObjectId to string id for response
+        reminder["id"] = str(reminder["_id"])
+        del reminder["_id"]
+
+        return reminder
 

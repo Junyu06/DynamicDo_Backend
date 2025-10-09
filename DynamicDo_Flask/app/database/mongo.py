@@ -21,3 +21,9 @@ users_collection.create_index("email", unique=True)
 
 # user_id索引，加速查询某用户的所有reminders
 reminders_collection.create_index("user_id")
+
+# completed索引，用于筛选已完成/未完成的reminders
+reminders_collection.create_index("completed")
+
+# 复合索引，加速按用户和完成状态查询
+reminders_collection.create_index([("user_id", 1), ("completed", 1)])
