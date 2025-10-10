@@ -10,10 +10,10 @@ class AiClient:
     """Client for AI-powered reminder ranking using OpenAI's ChatGPT API."""
 
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = api_key or os.getenv("CHATGPT_TOKEN", "")
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
 
         if not self.api_key:
-            raise ValueError("CHATGPT_TOKEN environment variable is not set")
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
 
         self.client = OpenAI(api_key=self.api_key)
         self.model = "gpt-4o-mini"  # Cost-effective model for ranking

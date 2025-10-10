@@ -1,17 +1,23 @@
 import os
-import hashlib
+import bcrypt
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional
 from app.database.mongo import users_collection
 
-JWT_SECRET = os.getenv("JWT_SECRET", "secret")
+# Require JWT_SECRET to be set - fail fast if missing
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("JWT_SECRET environment variable must be set")
+
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 class UserService:
     @staticmethod
     def hash_password(password: str) -> str:
-        return hashlib.sha256(password.encode()).hexdigest()
+        """Hash password using bcrypt with automatic salt generation."""
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
     def register_user(self, email: str, password: str) -> dict:
         if users_collection.find_one({"email": email}):
@@ -29,7 +35,11 @@ class UserService:
 
     def login_user(self, email: str, password: str) -> str:
         user = users_collection.find_one({"email": email})
-        if not user or user["password"] != self.hash_password(password):
+        if not user:
+            raise ValueError("Invalid email or password")
+
+        # Verify password using bcrypt
+        if not bcrypt.checkpw(password.encode('utf-8'), user["password"].encode('utf-8')):
             raise ValueError("Invalid email or password")
 
         payload = {
