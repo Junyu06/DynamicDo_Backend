@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
 from app.services.reminder_service import ReminderService
 from app.services.user_service import UserService
+from app.services.ai_client import AiClient
 
 reminder_bp = Blueprint("reminders", __name__)
 reminder_service = ReminderService()
 user_service = UserService()
+ai_client = AiClient.from_env()
 
 
 @reminder_bp.post("/")
@@ -164,3 +166,48 @@ def get_reminder(reminder_id):
         return jsonify(reminder), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+
+@reminder_bp.post("/rank")
+def rank_reminders():
+    """Use AI to rank and prioritize user's uncompleted reminders based on urgency and importance."""
+    # Extract token from Authorization header
+    auth = request.headers.get("Authorization", "")
+    token = auth.replace("Bearer ", "")
+
+    # Verify token and get user_id
+    decoded = user_service.verify_token(token)
+    if not decoded:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = decoded["user_id"]
+
+    # Get optional parameters from request body
+    data = request.get_json(silent=True) or {}
+    context = data.get("context", "")
+    debug = data.get("debug", False)  # Include reasoning if debug=True
+
+    try:
+        # Get only uncompleted reminders (more efficient - MongoDB query filters directly)
+        uncompleted_reminders = reminder_service.list_uncompleted_reminders(user_id)
+
+        if not uncompleted_reminders:
+            return jsonify({
+                "reminders": [],
+                "count": 0,
+                "message": "No uncompleted reminders to rank"
+            }), 200
+
+        # Use AI to rank uncompleted reminders
+        # debug=True includes reasoning (uses more tokens), debug=False saves tokens
+        ranked_reminders = ai_client.rank_tasks(uncompleted_reminders, context, debug)
+
+        return jsonify({
+            "reminders": ranked_reminders,
+            "count": len(ranked_reminders)
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "error": f"Failed to rank reminders: {str(e)}"
+        }), 500

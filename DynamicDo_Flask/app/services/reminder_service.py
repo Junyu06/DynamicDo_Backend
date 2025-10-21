@@ -62,6 +62,28 @@ class ReminderService:
             del reminder["_id"]
 
         return reminders
+
+    def list_uncompleted_reminders(self, user_id: str) -> list[dict[str, Any]]:
+        """Get only uncompleted reminders for a user (more efficient for AI ranking).
+
+        Args:
+            user_id: ID of the user
+
+        Returns:
+            List of uncompleted reminders (completed=False) with id field
+        """
+        # Query MongoDB directly for uncompleted reminders only
+        reminders = list(reminders_collection.find({
+            "user_id": user_id,
+            "completed": False
+        }))
+
+        # Convert ObjectId to string id field for JSON serialization
+        for reminder in reminders:
+            reminder["id"] = str(reminder["_id"])
+            del reminder["_id"]
+
+        return reminders
     
     def delete_reminders(self, user_id: str, data: list[str]) -> dict[str, Any]:
         """Delete reminder from the users, cap for 10 first
