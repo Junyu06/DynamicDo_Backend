@@ -1,3 +1,15 @@
 /DynamicDo_Flask/venv
 DynamicDo_Flask/.env
 DynamicDo_Flask/ussforlaterDNU
+.claude/commands/openspec/apply.md
+.claude/commands/openspec/archive.md
+.claude/commands/openspec/proposal.md
+AGENTS.md
+CLAUDE.md
+openspec/openapi.yaml
+openspec/project.md
+openspec/README.md
+openspec/specs/ai-communication/spec.md
+openspec/specs/authentication/spec.md
+openspec/specs/reminders/spec.md
+OPENSPEC_USAGE.md

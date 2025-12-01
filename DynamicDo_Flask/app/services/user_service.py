@@ -31,7 +31,22 @@ class UserService:
         })
 
         user_id = str(result.inserted_id)
-        return {"user_id": user_id, "email": email}
+
+        # Generate JWT token for the newly registered user
+        payload = {
+            "user_id": user_id,
+            "email": email,
+            "exp": datetime.utcnow() + timedelta(hours=1)
+        }
+        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+        return {
+            "user_id": user_id,
+            "email": email,
+            "token": token,
+            "access_token": token,
+            "token_type": "bearer"
+        }
 
     def login_user(self, email: str, password: str) -> str:
         user = users_collection.find_one({"email": email})
