@@ -46,13 +46,15 @@ class ReminderService:
         return reminder
 
     def list_reminders(self, user_id: str) -> list[dict[str, Any]]:
-        """Get all reminders for a user.
+        """Get all reminders for a user, sorted by rank and completion status.
 
         Args:
             user_id: ID of the user
 
         Returns:
-            List of reminders for the user (with id field)
+            List of reminders for the user (with id field), sorted by:
+            1. Completed status (uncompleted first)
+            2. Rank (highest first, if present)
         """
         reminders = list(reminders_collection.find({"user_id": user_id}))
 
@@ -60,6 +62,12 @@ class ReminderService:
         for reminder in reminders:
             reminder["id"] = str(reminder["_id"])
             del reminder["_id"]
+
+        # Sort reminders: uncompleted first, then by rank (highest first)
+        reminders.sort(key=lambda r: (
+            r.get("completed", False),  # False (uncompleted) comes before True
+            -r.get("rank", -1)  # Higher ranks first, items without rank go to end
+        ))
 
         return reminders
 
@@ -269,4 +277,57 @@ class ReminderService:
         del reminder["_id"]
 
         return reminder
+
+    def save_ranking_results(self, user_id: str, ranked_reminders: list[dict[str, Any]]) -> dict[str, Any]:
+        """Save AI ranking results to database in bulk.
+
+        Args:
+            user_id: ID of the user who owns the reminders
+            ranked_reminders: List of reminders with rank and ai_priority fields
+
+        Returns:
+            Dictionary with count of updated reminders
+
+        Raises:
+            ValueError: If ranked_reminders is empty or invalid
+        """
+        if not ranked_reminders:
+            raise ValueError("No ranked reminders to save")
+
+        updated_count = 0
+        errors = []
+
+        for reminder in ranked_reminders:
+            try:
+                reminder_id = reminder.get("id")
+                rank = reminder.get("rank")
+                ai_priority = reminder.get("ai_priority")
+
+                if not reminder_id or rank is None:
+                    continue
+
+                obj_id = ObjectId(reminder_id)
+
+                # Update rank and ai_priority fields
+                result = reminders_collection.update_one(
+                    {"_id": obj_id, "user_id": user_id},
+                    {
+                        "$set": {
+                            "rank": rank,
+                            "ai_priority": ai_priority,
+                            "updated_at": datetime.utcnow()
+                        }
+                    }
+                )
+
+                if result.modified_count > 0:
+                    updated_count += 1
+
+            except Exception as e:
+                errors.append({"id": reminder.get("id"), "error": str(e)})
+
+        return {
+            "updated": updated_count,
+            "errors": errors
+        }
 

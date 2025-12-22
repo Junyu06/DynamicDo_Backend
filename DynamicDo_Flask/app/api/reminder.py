@@ -9,6 +9,11 @@ user_service = UserService()
 ai_client = AiClient.from_env()
 
 
+def error_response(message: str, status_code: int):
+    """Create a standardized error response with both error and detail fields."""
+    return jsonify({"error": message, "detail": message}), status_code
+
+
 @reminder_bp.post("/")
 def create_reminder():
     """Create a new reminder for the authenticated user."""
@@ -19,7 +24,7 @@ def create_reminder():
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -30,7 +35,7 @@ def create_reminder():
         reminder = reminder_service.create_reminder(user_id, data)
         return jsonify(reminder), 201
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
 
 
 @reminder_bp.get("/")
@@ -43,7 +48,7 @@ def list_reminders():
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -61,7 +66,7 @@ def delete_reminder():
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -72,7 +77,7 @@ def delete_reminder():
         reminder = reminder_service.delete_reminders(user_id, data)
         return jsonify(reminder), 201
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
 
 
 @reminder_bp.route("/<reminder_id>", methods=["PATCH"])
@@ -85,7 +90,7 @@ def update_reminder(reminder_id):
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -96,7 +101,7 @@ def update_reminder(reminder_id):
         reminder = reminder_service.update_reminder(user_id, reminder_id, data)
         return jsonify(reminder), 200
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
 
 
 @reminder_bp.post("/complete")
@@ -109,7 +114,7 @@ def complete_reminders():
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -120,7 +125,7 @@ def complete_reminders():
         result = reminder_service.toggle_reminder_completion(user_id, data, True)
         return jsonify(result), 200
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
 
 
 @reminder_bp.post("/uncomplete")
@@ -133,7 +138,7 @@ def uncomplete_reminders():
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -144,7 +149,7 @@ def uncomplete_reminders():
         result = reminder_service.toggle_reminder_completion(user_id, data, False)
         return jsonify(result), 200
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
 
 
 @reminder_bp.get("/<reminder_id>")
@@ -157,7 +162,7 @@ def get_reminder(reminder_id):
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -165,7 +170,7 @@ def get_reminder(reminder_id):
         reminder = reminder_service.get_reminder_by_id(user_id, reminder_id)
         return jsonify(reminder), 200
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return error_response(str(e), 400)
 
 
 @reminder_bp.post("/rank")
@@ -178,7 +183,7 @@ def rank_reminders():
     # Verify token and get user_id
     decoded = user_service.verify_token(token)
     if not decoded:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        return error_response("Invalid or expired token", 401)
 
     user_id = decoded["user_id"]
 
@@ -202,12 +207,14 @@ def rank_reminders():
         # debug=True includes reasoning (uses more tokens), debug=False saves tokens
         ranked_reminders = ai_client.rank_tasks(uncompleted_reminders, context, debug)
 
+        # Save ranking results to database for persistence
+        save_result = reminder_service.save_ranking_results(user_id, ranked_reminders)
+
         return jsonify({
             "reminders": ranked_reminders,
-            "count": len(ranked_reminders)
+            "count": len(ranked_reminders),
+            "saved": save_result["updated"]
         }), 200
 
     except Exception as e:
-        return jsonify({
-            "error": f"Failed to rank reminders: {str(e)}"
-        }), 500
+        return error_response(f"Failed to rank reminders: {str(e)}", 500)
